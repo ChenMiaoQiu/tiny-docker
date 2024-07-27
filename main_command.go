@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 
+	"github.com/ChenMiaoQiu/tiny-docker/cgroups/subsystem"
 	"github.com/ChenMiaoQiu/tiny-docker/container"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
@@ -17,6 +18,18 @@ var runCommand = cli.Command{
 			Name:  "it",
 			Usage: "enable tty",
 		},
+		&cli.StringFlag{
+			Name:  "mem",
+			Usage: "memory limit,e.g.: -mem 100m", // 限制内存使用率
+		},
+		&cli.IntFlag{
+			Name:  "cpu",
+			Usage: "cpu quota,e.g.: -cpu 100", // 限制进程 cpu 使用率
+		},
+		&cli.StringFlag{
+			Name:  "cpuset",
+			Usage: "cpuset limit,e.g.: -cpuset 2,4", // 限制进程 cpu 使用率
+		},
 	},
 	Action: func(ctx *cli.Context) error {
 		if ctx.Args().Len() < 1 {
@@ -24,7 +37,18 @@ var runCommand = cli.Command{
 		}
 		cmd := ctx.Args().Slice()
 		tty := ctx.Bool("it")
-		Run(tty, cmd)
+		// 构建资源控制器
+		memoryLimit := ctx.String("mem")
+		cpuLimit := ctx.Int("cpu")
+		cpusetLimit := ctx.String("cpuset")
+
+		limitConfig := &subsystem.ResourceConfig{
+			MemoryLimit: memoryLimit,
+			CpuSet:      cpusetLimit,
+			CpuCfsQuota: cpuLimit,
+		}
+
+		Run(tty, cmd, limitConfig)
 		return nil
 	},
 }

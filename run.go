@@ -4,11 +4,13 @@ import (
 	"os"
 	"strings"
 
+	"github.com/ChenMiaoQiu/tiny-docker/cgroups"
+	"github.com/ChenMiaoQiu/tiny-docker/cgroups/subsystem"
 	"github.com/ChenMiaoQiu/tiny-docker/container"
 	log "github.com/sirupsen/logrus"
 )
 
-func Run(tty bool, cmdArr []string) {
+func Run(tty bool, cmdArr []string, resourcesConfig *subsystem.ResourceConfig) {
 	parent, writePipe := container.NewParentProcess(tty)
 	if parent == nil {
 		log.Errorf("New parent process error")
@@ -19,9 +21,15 @@ func Run(tty bool, cmdArr []string) {
 		log.Error(err)
 	}
 
+	cgroupManager := cgroups.NewCgroupManager("tiny-docker")
+	// 进程结束时自动删除对应cgroup资源限制
+	_ = cgroupManager.Set(resourcesConfig)
+	_ = cgroupManager.Apply(parent.Process.Pid, resourcesConfig)
+
 	// 创建完子进程后发送参数
 	sendInitCommand(cmdArr, writePipe)
 	_ = parent.Wait()
+	cgroupManager.Destroy()
 	os.Exit(-1)
 }
 
