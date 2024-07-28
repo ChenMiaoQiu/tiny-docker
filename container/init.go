@@ -9,7 +9,7 @@ import (
 	"syscall"
 
 	"github.com/pkg/errors"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 // index0：标准输入
@@ -35,15 +35,15 @@ func RunContainerInitProcess() error {
 
 	path, err := exec.LookPath(command[0])
 	if err != nil {
-		log.Errorf("Exec loop path error %v", err)
+		logrus.Errorf("Exec loop path error %v", err)
 		return err
 	}
 
-	log.Info("Find path: ", path)
-	log.Info("All command is: ", command)
+	logrus.Info("Find path: ", path)
+	logrus.Info("All command is: ", command)
 
-	if err := syscall.Exec(path, command[1:], os.Environ()); err != nil {
-		log.Errorf(err.Error())
+	if err := syscall.Exec(path, command, os.Environ()); err != nil {
+		logrus.Errorf(err.Error())
 	}
 	return nil
 }
@@ -54,7 +54,7 @@ func readUserCommand() []string {
 	defer pipe.Close()
 	msg, err := io.ReadAll(pipe)
 	if err != nil {
-		log.Error("Fail to read pipe msg: ", msg)
+		logrus.Error("Fail to read pipe msg: ", msg)
 		return nil
 	}
 	msgStr := string(msg)
@@ -65,32 +65,36 @@ func readUserCommand() []string {
 func setUpMount() {
 	pwd, err := os.Getwd()
 	if err != nil {
-		log.Errorf("Get current location error %v", err)
+		logrus.Errorf("Get current location error %v", err)
 		return
 	}
-	log.Infof("Current location is %s", pwd)
+	logrus.Infof("Current location is %s", pwd)
 
 	// mount proc 之前先把所有挂载点的传播类型改为 private，避免本 namespace 中的挂载事件外泄。
 	err = syscall.Mount("", "/", "", syscall.MS_PRIVATE|syscall.MS_REC, "")
 	if err != nil {
-		log.Error("set private mount fail: ", err)
+		logrus.Error("set private mount fail: ", err)
 		return
 	}
+
+	err = pivoteRoot(pwd)
+	if err != nil {
+		logrus.Errorf("pivotRoot failed: %v", err)
+		return
+	}
+
 	// 如果不先做 private mount，会导致挂载事件外泄，后续再执行 mydocker 命令时 /proc 文件系统异常
 	// 执行 mount -t proc proc /proc 命令重新挂载来解决
 	defaultMountFlags := syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NODEV
 	_ = syscall.Mount("proc", "/proc", "proc", uintptr(defaultMountFlags), "")
 
-	err = pivoteRoot(pwd)
-	if err != nil {
-		log.Errorf("pivotRoot failed: %v", err)
-		return
-	}
-
 	// 由于前面 pivotRoot 切换了 rootfs，因此这里重新 mount 一下 /dev 目录
 	// tmpfs 是基于 件系 使用 RAM、swap 分区来存储。
 	// 不挂载 /dev，会导致容器内部无法访问和使用许多设备，这可能导致系统无法正常工作
-	syscall.Mount("tmpfs", "/dev", "tmpfs", syscall.MS_NOSUID|syscall.MS_STRICTATIME, "mode=755")
+	err = syscall.Mount("tmpfs", "/dev", "tmpfs", syscall.MS_NOSUID|syscall.MS_STRICTATIME, "mode=755")
+	if err != nil {
+		logrus.Error("mount tmpfs error: ", err)
+	}
 }
 
 // pivoteRoot 原先的根文件系统会被移到指定的目录，而新的根文件系统会变为指定的目录
@@ -123,6 +127,7 @@ func pivoteRoot(root string) error {
 
 	// 最后再把old_root umount了，即 umount rootfs/.pivot_root
 	// 由于当前已经是在 rootfs 下了，就不能再用上面的rootfs/.pivot_root这个路径了,现在直接用/.pivot_root这个路径即可
+	pivotDir = filepath.Join("/", ".pivot_root")
 	err = syscall.Unmount(pivotDir, syscall.MNT_DETACH)
 	if err != nil {
 		return errors.WithMessage(err, "unmount pivote_root dir fail")

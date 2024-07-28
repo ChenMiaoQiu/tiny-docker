@@ -1,11 +1,14 @@
 package container
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"syscall"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/ChenMiaoQiu/tiny-docker/utils"
+	"github.com/sirupsen/logrus"
 )
 
 // NewParentProcess 构建 command 用于启动一个新进程
@@ -20,7 +23,7 @@ func NewParentProcess(tty bool) (*exec.Cmd, *os.File) {
 	// 创建匿名管道用于传递参数
 	readPipe, writePipe, err := os.Pipe()
 	if err != nil {
-		log.Errorf("Create pipe error: %v", err)
+		logrus.Errorf("Create pipe error: %v", err)
 		return nil, nil
 	}
 	// 这里的 init 指令就用用来在子进程中调用 initCommand
@@ -39,6 +42,99 @@ func NewParentProcess(tty bool) (*exec.Cmd, *os.File) {
 
 	// 将读取方转入子进程
 	cmd.ExtraFiles = []*os.File{readPipe}
-	cmd.Dir = "/root/busybox"
+	rootPath := "/root"
+	NewWorkSpace(rootPath)
+	cmd.Dir = path.Join(rootPath, "merged")
 	return cmd, writePipe
+}
+
+func NewWorkSpace(rootPath string) {
+	createLower(rootPath)
+	createDirs(rootPath)
+	mountOverlayFS(rootPath)
+}
+
+// createLower 将busybox作为overlayfs的lower层
+func createLower(rootURL string) {
+	busyboxURL := path.Join(rootURL, "busybox")
+	busyboxTarURL := path.Join(rootURL, "busybox.tar")
+	// 检查是否存在busybox 文件夹
+	exist, err := utils.PathExists(busyboxURL)
+	if err != nil {
+		logrus.Infof("Fail to check busybox url %v exists: %v", busyboxURL, err)
+	}
+
+	// 如果不存在则创建目录并解压到busybox文件夹
+	if !exist {
+		err = os.Mkdir(busyboxURL, 0777)
+		if err != nil {
+			logrus.Errorf("Mkdir dir %s error: %v", busyboxURL, err)
+		}
+		_, err := exec.Command("tar", "-xvf", busyboxTarURL, "-C", busyboxURL).CombinedOutput()
+		if err != nil {
+			logrus.Errorf("Untar dir %s error: %v", busyboxTarURL, err)
+		}
+	}
+}
+
+// createDirs 创建overlayfs需要的的upper、worker目录
+func createDirs(rootPath string) {
+	dirs := []string{
+		path.Join(rootPath, "merged"),
+		path.Join(rootPath, "upper"),
+		path.Join(rootPath, "work"),
+	}
+
+	for _, dir := range dirs {
+		if err := os.Mkdir(dir, 0777); err != nil {
+			logrus.Errorf("mkdir dir %s error. %v", dir, err)
+		}
+	}
+}
+
+// mountOverlayFS 挂载overlayfs
+func mountOverlayFS(rootPath string) {
+	// 拼接参数
+	// e.g. lowerdir=/root/busybox,upperdir=/root/upper,workdir=/root/work
+	dirs := fmt.Sprintf("lowerdir=%s,upperdir=%s,workdir=%s", path.Join(rootPath, "busybox"),
+		path.Join(rootPath, "upper"), path.Join(rootPath, "work"))
+
+	// 完整命令：mount -t overlay overlay -o lowerdir=/root/busybox,upperdir=/root/upper,workdir=/root/work /root/merged
+	cmd := exec.Command("mount", "-t", "overlay", "overlay", "-o", dirs, path.Join(rootPath, "merged"))
+	logrus.Infof("mount overlayfs: [%s]", cmd.String())
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		logrus.Errorf("%v", err)
+	}
+}
+
+// DeleteWorkSpace Delete the AUFS filesystem while container exit
+func DeleteWorkSpace(rootPath string) {
+	umountOverlayFS(path.Join(rootPath, "merged"))
+	deleteDirs(rootPath)
+}
+
+func umountOverlayFS(mntPath string) {
+	cmd := exec.Command("umount", mntPath)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		logrus.Error(err)
+	}
+}
+
+func deleteDirs(rootPath string) {
+	dirs := []string{
+		path.Join(rootPath, "merged"),
+		path.Join(rootPath, "upper"),
+		path.Join(rootPath, "work"),
+	}
+
+	for _, dir := range dirs {
+		err := os.RemoveAll(dir)
+		if err != nil {
+			logrus.Errorf("Remove dir %s error: %v", dir, err)
+		}
+	}
 }

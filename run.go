@@ -22,15 +22,18 @@ func Run(tty bool, cmdArr []string, resourcesConfig *subsystem.ResourceConfig) {
 	}
 
 	cgroupManager := cgroups.NewCgroupManager("tiny-docker")
-	// 进程结束时自动删除对应cgroup资源限制
+	// 配置cgroup资源限制
 	_ = cgroupManager.Set(resourcesConfig)
 	_ = cgroupManager.Apply(parent.Process.Pid, resourcesConfig)
 
 	// 创建完子进程后发送参数
 	sendInitCommand(cmdArr, writePipe)
 	_ = parent.Wait()
+
+	// 进程结束时自动删除对应cgroup资源限制
 	cgroupManager.Destroy()
-	os.Exit(-1)
+	// 解绑并删除overlayFS 使用的upper work mount 文件夹
+	container.DeleteWorkSpace("/root/")
 }
 
 func sendInitCommand(comArr []string, writePipe *os.File) {
