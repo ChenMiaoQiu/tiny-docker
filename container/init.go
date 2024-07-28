@@ -8,6 +8,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/ChenMiaoQiu/tiny-docker/constant"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -109,7 +110,7 @@ func pivoteRoot(root string) error {
 	// 创建临时目录挂载旧root
 	pivotDir := filepath.Join(root, ".pivot_root")
 	// 创建一个文件夹，开放所有读写执行权限
-	err = os.Mkdir(pivotDir, 0777)
+	err = os.Mkdir(pivotDir, constant.Perm0777)
 	if err != nil {
 		return err
 	}

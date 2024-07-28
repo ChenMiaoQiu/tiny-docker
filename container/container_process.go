@@ -7,6 +7,7 @@ import (
 	"path"
 	"syscall"
 
+	"github.com/ChenMiaoQiu/tiny-docker/constant"
 	"github.com/ChenMiaoQiu/tiny-docker/utils"
 	"github.com/sirupsen/logrus"
 )
@@ -19,7 +20,7 @@ import (
 3.下面的clone参数就是去fork出来一个新进程，并且使用了namespace隔离新创建的进程和外部环境。
 4.如果用户指定了-it参数，就需要把当前进程的输入输出导入到标准输入输出上
 */
-func NewParentProcess(tty bool) (*exec.Cmd, *os.File) {
+func NewParentProcess(tty bool, volume string) (*exec.Cmd, *os.File) {
 	// 创建匿名管道用于传递参数
 	readPipe, writePipe, err := os.Pipe()
 	if err != nil {
@@ -43,15 +44,26 @@ func NewParentProcess(tty bool) (*exec.Cmd, *os.File) {
 	// 将读取方转入子进程
 	cmd.ExtraFiles = []*os.File{readPipe}
 	rootPath := "/root"
-	NewWorkSpace(rootPath)
+	NewWorkSpace(rootPath, volume)
 	cmd.Dir = path.Join(rootPath, "merged")
 	return cmd, writePipe
 }
 
-func NewWorkSpace(rootPath string) {
+func NewWorkSpace(rootPath string, volume string) {
 	createLower(rootPath)
 	createDirs(rootPath)
 	mountOverlayFS(rootPath)
+
+	// 判断是否指定的数据卷，如果指定了数据卷则挂载数据卷
+	if volume != "" {
+		mntPath := path.Join(rootPath, "merged")
+		hostPath, containerPath, err := utils.VolumeExtract(volume)
+		if err != nil {
+			logrus.Error("extract volume failed,maybe volume parameter input is not correct, detail: ", err)
+			return
+		}
+		mountVolume(mntPath, hostPath, containerPath)
+	}
 }
 
 // createLower 将busybox作为overlayfs的lower层
@@ -66,7 +78,7 @@ func createLower(rootURL string) {
 
 	// 如果不存在则创建目录并解压到busybox文件夹
 	if !exist {
-		err = os.Mkdir(busyboxURL, 0777)
+		err = os.Mkdir(busyboxURL, constant.Perm0777)
 		if err != nil {
 			logrus.Errorf("Mkdir dir %s error: %v", busyboxURL, err)
 		}
@@ -86,7 +98,7 @@ func createDirs(rootPath string) {
 	}
 
 	for _, dir := range dirs {
-		if err := os.Mkdir(dir, 0777); err != nil {
+		if err := os.Mkdir(dir, constant.Perm0777); err != nil {
 			logrus.Errorf("mkdir dir %s error. %v", dir, err)
 		}
 	}
@@ -110,8 +122,20 @@ func mountOverlayFS(rootPath string) {
 }
 
 // DeleteWorkSpace Delete the AUFS filesystem while container exit
-func DeleteWorkSpace(rootPath string) {
-	umountOverlayFS(path.Join(rootPath, "merged"))
+func DeleteWorkSpace(rootPath string, volume string) {
+	mntPath := path.Join(rootPath, "merged")
+	// 判断是否存在数据卷，存在则取消挂载
+	if volume != "" {
+		_, containerPath, err := utils.VolumeExtract(volume)
+		if err != nil {
+			logrus.Errorf("extract volume failed, maybe volume parameter input is not correct, detail:%v", err)
+			return
+		}
+		umountVolume(mntPath, containerPath)
+	}
+
+	// 如果先删除再取消挂载，数据卷无法保存数据
+	umountOverlayFS(mntPath)
 	deleteDirs(rootPath)
 }
 
