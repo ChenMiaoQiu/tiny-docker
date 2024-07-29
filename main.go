@@ -1,9 +1,10 @@
 package main
 
 import (
+	"log"
 	"os"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 )
 
@@ -16,9 +17,9 @@ func main() {
 		Name:  "tinydocker",
 		Usage: usage,
 		Before: func(ctx *cli.Context) error {
-			log.SetFormatter(&log.JSONFormatter{})
+			logrus.SetFormatter(&logrus.JSONFormatter{})
 
-			log.SetOutput(os.Stdout)
+			logrus.SetOutput(os.Stdout)
 			return nil
 		},
 		Commands: []*cli.Command{
@@ -26,6 +27,7 @@ func main() {
 			&runCommand,
 			&commitCommand,
 			&listCommand,
+			&logCommand,
 		},
 	}
 

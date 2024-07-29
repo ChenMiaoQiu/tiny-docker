@@ -23,6 +23,7 @@ const (
 	InfoLocFormat = InfoLoc + "%s/"
 	ConfigName    = "config.json"
 	IDLength      = 10
+	LogFile       = "%s-json.log"
 )
 
 type Info struct {
@@ -89,4 +90,9 @@ func DeleteContainerInfo(containerID string) {
 // GenerateContainerID 生成容器id
 func GenerateContainerID() string {
 	return utils.RandStringBytes(IDLength)
+}
+
+// GetLogFile 获取日志文件名称
+func GetLogFile(containerId string) string {
+	return fmt.Sprintf(LogFile, containerId)
 }

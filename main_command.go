@@ -106,3 +106,16 @@ var listCommand = cli.Command{
 		return nil
 	},
 }
+
+var logCommand = cli.Command{
+	Name:  "logs",
+	Usage: "print logs of a container",
+	Action: func(ctx *cli.Context) error {
+		if ctx.Args().Len() < 1 {
+			return fmt.Errorf("please input your container name")
+		}
+		containerName := ctx.Args().Get(0)
+		logContainer(containerName)
+		return nil
+	},
+}
