@@ -38,6 +38,10 @@ var runCommand = cli.Command{
 			Name:  "v",
 			Usage: "volume,e.g.: -v /etc/conf:/etc/conf",
 		},
+		&cli.StringFlag{
+			Name:  "name",
+			Usage: "container name, e.g.: -name containerName",
+		},
 	},
 	Action: func(ctx *cli.Context) error {
 		if ctx.Args().Len() < 1 {
@@ -64,8 +68,9 @@ var runCommand = cli.Command{
 		}
 
 		volume := ctx.String("v")
+		containerName := ctx.String("name")
 		if tty || detach {
-			Run(tty, cmd, limitConfig, volume)
+			Run(tty, cmd, limitConfig, volume, containerName)
 		}
 		return nil
 	},
@@ -90,5 +95,14 @@ var commitCommand = cli.Command{
 		}
 		imageName := ctx.Args().Get(0)
 		return commitContainer(imageName)
+	},
+}
+
+var listCommand = cli.Command{
+	Name:  "ps",
+	Usage: "list all the containers",
+	Action: func(ctx *cli.Context) error {
+		ListContainerInfos()
+		return nil
 	},
 }

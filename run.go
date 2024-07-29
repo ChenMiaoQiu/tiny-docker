@@ -7,18 +7,27 @@ import (
 	"github.com/ChenMiaoQiu/tiny-docker/cgroups"
 	"github.com/ChenMiaoQiu/tiny-docker/cgroups/subsystem"
 	"github.com/ChenMiaoQiu/tiny-docker/container"
-	log "github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
 
-func Run(tty bool, cmdArr []string, resourcesConfig *subsystem.ResourceConfig, volume string) {
+func Run(tty bool, cmdArr []string, resourcesConfig *subsystem.ResourceConfig, volume string, containerName string) {
+	containerId := container.GenerateContainerID()
+
 	parent, writePipe := container.NewParentProcess(tty, volume)
 	if parent == nil {
-		log.Errorf("New parent process error")
+		logrus.Error("New parent process error")
 		return
 	}
 	err := parent.Start()
 	if err != nil {
-		log.Error(err)
+		logrus.Error(err)
+	}
+
+	// 记录容器信息
+	err = container.RecordContainerInfo(parent.Process.Pid, cmdArr, containerName, containerId)
+	if err != nil {
+		logrus.Error("Record container info error ", err)
+		return
 	}
 
 	cgroupManager := cgroups.NewCgroupManager("tiny-docker")
@@ -35,12 +44,13 @@ func Run(tty bool, cmdArr []string, resourcesConfig *subsystem.ResourceConfig, v
 		_ = parent.Wait()
 		// 解绑并删除overlayFS 使用的upper work mount 文件夹
 		container.DeleteWorkSpace("/root/", volume)
+		container.DeleteContainerInfo(containerId)
 	}
 }
 
 func sendInitCommand(comArr []string, writePipe *os.File) {
 	command := strings.Join(comArr, " ")
-	log.Info("command is: ", command)
+	logrus.Info("command is: ", command)
 	writePipe.WriteString(command)
 	writePipe.Close()
 }

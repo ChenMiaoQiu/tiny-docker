@@ -21,7 +21,12 @@ func main() {
 			log.SetOutput(os.Stdout)
 			return nil
 		},
-		Commands: []*cli.Command{&initCommand, &runCommand, &commitCommand},
+		Commands: []*cli.Command{
+			&initCommand,
+			&runCommand,
+			&commitCommand,
+			&listCommand,
+		},
 	}
 
 	err := app.Run(os.Args)

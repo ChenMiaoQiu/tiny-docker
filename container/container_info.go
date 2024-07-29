@@ -1,0 +1,92 @@
+package container
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"path"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/ChenMiaoQiu/tiny-docker/constant"
+	"github.com/ChenMiaoQiu/tiny-docker/utils"
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+)
+
+const (
+	RUNNING       = "running"
+	STOP          = "stopped"
+	Exit          = "exited"
+	InfoLoc       = "/var/lib/tiny-docker/containers/"
+	InfoLocFormat = InfoLoc + "%s/"
+	ConfigName    = "config.json"
+	IDLength      = 10
+)
+
+type Info struct {
+	Pid         string `json:"pid"`        // 容器的init进程在宿主机上的 PID
+	Id          string `json:"id"`         // 容器Id
+	Name        string `json:"name"`       // 容器名
+	Command     string `json:"command"`    // 容器内init运行命令
+	CreatedTime string `json:"createTime"` // 创建时间
+	Status      string `json:"status"`     // 容器的状态
+}
+
+// RecordContainerInfo 记录容器信息
+func RecordContainerInfo(containerPID int, commandArray []string, containerName string, containerId string) error {
+	// 如果未指定容器名，则使用随机生成的containerID
+	if containerName == "" {
+		containerName = containerId
+	}
+	command := strings.Join(commandArray, "")
+	containerInfo := &Info{
+		Pid:         strconv.Itoa(containerPID),
+		Id:          containerId,
+		Name:        containerName,
+		Command:     command,
+		CreatedTime: time.Now().Format("2006-01-02 15:04:05"),
+		Status:      RUNNING,
+	}
+
+	jsonByte, err := json.Marshal(containerInfo)
+	if err != nil {
+		return errors.WithMessage(err, "container info marshal failed")
+	}
+	jsonStr := string(jsonByte)
+	// 拼接出存储容器信息文件的路径，如果目录不存在则级联创建
+	dirPath := fmt.Sprintf(InfoLocFormat, containerId)
+	if err := os.MkdirAll(dirPath, constant.Perm0622); err != nil {
+		return errors.WithMessagef(err, "mkdir %s failed", dirPath)
+	}
+
+	// 写入文件信息
+	fileName := path.Join(dirPath, ConfigName)
+	file, err := os.Create(fileName)
+	defer func() {
+		_ = file.Close()
+	}()
+	if err != nil {
+		return errors.WithMessagef(err, "create file %s failed", fileName)
+	}
+	_, err = file.WriteString(jsonStr)
+	if err != nil {
+		return errors.WithMessagef(err, "write container info to config file %s failed", fileName)
+	}
+
+	return nil
+}
+
+// DeleteContainerInfo 删除容器日志
+func DeleteContainerInfo(containerID string) {
+	dirPath := fmt.Sprintf(InfoLocFormat, containerID)
+	if err := os.RemoveAll(dirPath); err != nil {
+		logrus.Errorf("Remove dir %s error %v", dirPath, err)
+	}
+}
+
+// GenerateContainerID 生成容器id
+func GenerateContainerID() string {
+	return utils.RandStringBytes(IDLength)
+}

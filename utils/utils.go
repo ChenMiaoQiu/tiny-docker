@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"strings"
 )
@@ -32,4 +33,14 @@ func VolumeExtract(volume string) (string, string, error) {
 	}
 
 	return sourcePath, destPath, nil
+}
+
+// RandStringBytes 随机生成数字字符串
+func RandStringBytes(n int) string {
+	letterBytes := "123456789"
+	res := make([]byte, n)
+	for i := range res {
+		res[i] = letterBytes[rand.Intn(9)]
+	}
+	return string(res)
 }
