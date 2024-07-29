@@ -25,15 +25,17 @@ func Run(tty bool, cmdArr []string, resourcesConfig *subsystem.ResourceConfig, v
 	// 配置cgroup资源限制
 	_ = cgroupManager.Set(resourcesConfig)
 	_ = cgroupManager.Apply(parent.Process.Pid, resourcesConfig)
+	// 进程结束时自动删除对应cgroup资源限制
+	defer cgroupManager.Destroy()
 
 	// 创建完子进程后发送参数
 	sendInitCommand(cmdArr, writePipe)
-	_ = parent.Wait()
-
-	// 进程结束时自动删除对应cgroup资源限制
-	cgroupManager.Destroy()
-	// 解绑并删除overlayFS 使用的upper work mount 文件夹
-	container.DeleteWorkSpace("/root/", volume)
+	// 如果是tty，那么父进程等待，就是前台运行，否则就是跳过，实现后台运行
+	if tty {
+		_ = parent.Wait()
+		// 解绑并删除overlayFS 使用的upper work mount 文件夹
+		container.DeleteWorkSpace("/root/", volume)
+	}
 }
 
 func sendInitCommand(comArr []string, writePipe *os.File) {

@@ -18,6 +18,10 @@ var runCommand = cli.Command{
 			Name:  "it",
 			Usage: "enable tty",
 		},
+		&cli.BoolFlag{
+			Name:  "d",
+			Usage: "detach container",
+		},
 		&cli.StringFlag{
 			Name:  "mem",
 			Usage: "memory limit,e.g.: -mem 100m", // 限制内存使用率
@@ -41,6 +45,13 @@ var runCommand = cli.Command{
 		}
 		cmd := ctx.Args().Slice()
 		tty := ctx.Bool("it")
+		detach := ctx.Bool("d")
+
+		// tty 和 detach只能生效一个
+		if tty && detach {
+			return fmt.Errorf("it and d paramter can not both provided")
+		}
+
 		// 构建资源控制器
 		memoryLimit := ctx.String("mem")
 		cpuLimit := ctx.Int("cpu")
@@ -53,7 +64,9 @@ var runCommand = cli.Command{
 		}
 
 		volume := ctx.String("v")
-		Run(tty, cmd, limitConfig, volume)
+		if tty || detach {
+			Run(tty, cmd, limitConfig, volume)
+		}
 		return nil
 	},
 }
