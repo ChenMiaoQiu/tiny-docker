@@ -141,3 +141,16 @@ var execCommand = cli.Command{
 		return nil
 	},
 }
+
+var stopCommand = cli.Command{
+	Name:  "stop",
+	Usage: "stop container,e.g. tiny-docker stop [containerId]",
+	Action: func(ctx *cli.Context) error {
+		if ctx.Args().Len() < 1 {
+			return fmt.Errorf("missing container id")
+		}
+		containerId := ctx.Args().Get(0)
+		stopContainer(containerId)
+		return nil
+	},
+}

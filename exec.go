@@ -26,6 +26,11 @@ func ExecContainer(containerId string, comArray []string) {
 		return
 	}
 
+	if pid == "" {
+		logrus.Error("Not found container pid ", err)
+		return
+	}
+
 	cmd := exec.Command("/proc/self/exe", "exec")
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout

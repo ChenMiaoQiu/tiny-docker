@@ -29,6 +29,7 @@ func main() {
 			&listCommand,
 			&logCommand,
 			&execCommand,
+			&stopCommand,
 		},
 	}
 
