@@ -10,10 +10,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func Run(tty bool, cmdArr []string, resourcesConfig *subsystem.ResourceConfig, volume string, containerName string) {
+func Run(tty bool, cmdArr []string, resourcesConfig *subsystem.ResourceConfig, volume string, containerName string, imageName string) {
 	containerId := container.GenerateContainerID()
 
-	parent, writePipe := container.NewParentProcess(tty, volume, containerId)
+	parent, writePipe := container.NewParentProcess(tty, volume, containerId, imageName)
 	if parent == nil {
 		logrus.Error("New parent process error")
 		return
@@ -24,7 +24,7 @@ func Run(tty bool, cmdArr []string, resourcesConfig *subsystem.ResourceConfig, v
 	}
 
 	// 记录容器信息
-	err = container.RecordContainerInfo(parent.Process.Pid, cmdArr, containerName, containerId)
+	err = container.RecordContainerInfo(parent.Process.Pid, cmdArr, containerName, containerId, volume)
 	if err != nil {
 		logrus.Error("Record container info error ", err)
 		return
@@ -43,7 +43,7 @@ func Run(tty bool, cmdArr []string, resourcesConfig *subsystem.ResourceConfig, v
 	if tty {
 		_ = parent.Wait()
 		// 解绑并删除overlayFS 使用的upper work mount 文件夹
-		container.DeleteWorkSpace("/root/", volume)
+		container.DeleteWorkSpace(containerId, volume)
 		container.DeleteContainerInfo(containerId)
 	}
 }

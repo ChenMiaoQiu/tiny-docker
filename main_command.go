@@ -13,7 +13,7 @@ import (
 var runCommand = cli.Command{
 	Name: "run",
 	Usage: `Create a container with namespace and cgroups limit
-			mydocker run -it [command]`,
+			mydocker run -it [imageName] [command]`,
 	Flags: []cli.Flag{
 		&cli.BoolFlag{
 			Name:  "it",
@@ -45,10 +45,11 @@ var runCommand = cli.Command{
 		},
 	},
 	Action: func(ctx *cli.Context) error {
-		if ctx.Args().Len() < 1 {
-			return fmt.Errorf("missing container command")
+		if ctx.Args().Len() < 2 {
+			return fmt.Errorf("missing imageName or container command")
 		}
-		cmd := ctx.Args().Slice()
+		imageName := ctx.Args().Get(0)
+		cmd := ctx.Args().Slice()[1:]
 		tty := ctx.Bool("it")
 		detach := ctx.Bool("d")
 
@@ -71,7 +72,7 @@ var runCommand = cli.Command{
 		volume := ctx.String("v")
 		containerName := ctx.String("name")
 		if tty || detach {
-			Run(tty, cmd, limitConfig, volume, containerName)
+			Run(tty, cmd, limitConfig, volume, containerName, imageName)
 		}
 		return nil
 	},
@@ -89,13 +90,15 @@ var initCommand = cli.Command{
 
 var commitCommand = cli.Command{
 	Name:  "commit",
-	Usage: "commit container to image",
+	Usage: "commit container to image. e.g. tiny-docker commit [containerId] [imageName]",
 	Action: func(ctx *cli.Context) error {
-		if ctx.Args().Len() < 1 {
-			return fmt.Errorf("missing image name")
+		if ctx.Args().Len() < 2 {
+			return fmt.Errorf("missing container id or image name")
 		}
-		imageName := ctx.Args().Get(0)
-		return commitContainer(imageName)
+		containerId := ctx.Args().Get(0)
+		imageName := ctx.Args().Get(1)
+
+		return commitContainer(containerId, imageName)
 	},
 }
 
