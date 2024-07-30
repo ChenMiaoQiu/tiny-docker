@@ -28,6 +28,7 @@ func main() {
 			&commitCommand,
 			&listCommand,
 			&logCommand,
+			&execCommand,
 		},
 	}
 

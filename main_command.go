@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/ChenMiaoQiu/tiny-docker/cgroups/subsystem"
 	"github.com/ChenMiaoQiu/tiny-docker/container"
@@ -116,6 +117,27 @@ var logCommand = cli.Command{
 		}
 		containerName := ctx.Args().Get(0)
 		logContainer(containerName)
+		return nil
+	},
+}
+
+var execCommand = cli.Command{
+	Name:  "exec",
+	Usage: "exec a command into container",
+	Action: func(ctx *cli.Context) error {
+		// 如果环境变量存在，说明C代码已经运行过了，即setns系统调用已经执行了，这里就直接返回，避免重复执行
+		if os.Getenv(EnvExecPid) != "" {
+			log.Infof("pid callback pid %v", os.Getgid())
+			return nil
+		}
+		// tiny-docker [container name] [cmd]
+		if ctx.Args().Len() < 2 {
+			return fmt.Errorf("missing container name or command")
+		}
+		containerName := ctx.Args().Get(0)
+		// 第0位为容器名
+		cmdArray := ctx.Args().Slice()[1:]
+		ExecContainer(containerName, cmdArray)
 		return nil
 	},
 }
