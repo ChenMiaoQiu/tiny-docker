@@ -154,3 +154,23 @@ var stopCommand = cli.Command{
 		return nil
 	},
 }
+
+var removeCommand = cli.Command{
+	Name:  "rm",
+	Usage: "remove container,e.g. tiny-docker rm [containerId]",
+	Flags: []cli.Flag{
+		&cli.BoolFlag{
+			Name:  "f",
+			Usage: "enforce remove container",
+		},
+	},
+	Action: func(ctx *cli.Context) error {
+		if ctx.Args().Len() < 1 {
+			return fmt.Errorf("missing container id")
+		}
+		force := ctx.Bool("f")
+		containerId := ctx.Args().Get(0)
+		removeContainer(containerId, force)
+		return nil
+	},
+}

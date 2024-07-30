@@ -63,3 +63,32 @@ func getInfoByContainerId(containerId string) (container.Info, error) {
 	}
 	return containerInfo, nil
 }
+
+func removeContainer(containerId string, force bool) {
+	// 查询对应容器信息
+	containerInfo, err := getInfoByContainerId(containerId)
+	if err != nil {
+		logrus.Errorf("Get container %s info error %v", containerId, err)
+		return
+	}
+
+	switch containerInfo.Status {
+	case container.STOP: // STOP状态直接删除
+		dirPath := fmt.Sprintf(container.InfoLocFormat, containerId)
+		err = os.RemoveAll(dirPath)
+		if err != nil {
+			logrus.Errorf("Remove file %s error %v", dirPath, err)
+			return
+		}
+	case container.RUNNING: // 如果状态为运行中，判断是否强制删除，如果强制删除则先暂停再删除
+		if !force {
+			logrus.Errorf(`Couldn't remove running container [%s], Stop the container before attempting removal or force remove`, containerId)
+			return
+		}
+		stopContainer(containerId)
+		removeContainer(containerId, force)
+	default:
+		logrus.Errorf("Couldn't remove container,invalid status %s", containerInfo.Status)
+		return
+	}
+}
