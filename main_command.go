@@ -43,6 +43,10 @@ var runCommand = cli.Command{
 			Name:  "name",
 			Usage: "container name, e.g.: -name containerName",
 		},
+		&cli.StringSliceFlag{
+			Name:  "e",
+			Usage: "set environment,e.g. -e name=mydocker",
+		},
 	},
 	Action: func(ctx *cli.Context) error {
 		if ctx.Args().Len() < 2 {
@@ -71,8 +75,9 @@ var runCommand = cli.Command{
 
 		volume := ctx.String("v")
 		containerName := ctx.String("name")
+		envSlice := ctx.StringSlice("e")
 		if tty || detach {
-			Run(tty, cmd, limitConfig, volume, containerName, imageName)
+			Run(tty, cmd, limitConfig, volume, containerName, imageName, envSlice)
 		}
 		return nil
 	},

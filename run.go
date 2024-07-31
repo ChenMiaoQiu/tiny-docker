@@ -10,10 +10,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func Run(tty bool, cmdArr []string, resourcesConfig *subsystem.ResourceConfig, volume string, containerName string, imageName string) {
+func Run(tty bool, cmdArr []string, resourcesConfig *subsystem.ResourceConfig, volume string, containerName string, imageName string, envSlice []string) {
 	containerId := container.GenerateContainerID()
 
-	parent, writePipe := container.NewParentProcess(tty, volume, containerId, imageName)
+	parent, writePipe := container.NewParentProcess(tty, volume, containerId, imageName, envSlice)
 	if parent == nil {
 		logrus.Error("New parent process error")
 		return

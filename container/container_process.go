@@ -20,7 +20,7 @@ import (
 3.下面的clone参数就是去fork出来一个新进程，并且使用了namespace隔离新创建的进程和外部环境。
 4.如果用户指定了-it参数，就需要把当前进程的输入输出导入到标准输入输出上
 */
-func NewParentProcess(tty bool, volume string, containerId string, imageName string) (*exec.Cmd, *os.File) {
+func NewParentProcess(tty bool, volume string, containerId string, imageName string, envSlice []string) (*exec.Cmd, *os.File) {
 	// 创建匿名管道用于传递参数
 	readPipe, writePipe, err := os.Pipe()
 	if err != nil {
@@ -29,6 +29,7 @@ func NewParentProcess(tty bool, volume string, containerId string, imageName str
 	}
 	// 这里的 init 指令就用用来在子进程中调用 initCommand
 	cmd := exec.Command("/proc/self/exe", "init")
+	cmd.Env = append(os.Environ(), envSlice...)
 	// 设置隔离模式
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Cloneflags: syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID | syscall.CLONE_NEWNS |

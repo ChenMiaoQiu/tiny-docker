@@ -41,12 +41,15 @@ func ExecContainer(containerId string, comArray []string) {
 	logrus.Infof("container pid: %s command: %s", pid, cmdStr)
 	_ = os.Setenv(EnvExecPid, pid)
 	_ = os.Setenv(EnvExecCmd, cmdStr)
+	containerEnv := getEnvsByPid(pid)
+	cmd.Env = append(os.Environ(), containerEnv...)
 
 	if err = cmd.Run(); err != nil {
 		logrus.Errorf("Exec container %s error %v", containerId, err)
 	}
 }
 
+// getPidByContainerId 获取容器在运行中的pid
 func getPidByContainerId(containerId string) (string, error) {
 	// 拼接出记录容器信息的文件路径
 	dirPath := fmt.Sprintf(container.InfoLocFormat, containerId)
@@ -62,4 +65,18 @@ func getPidByContainerId(containerId string) (string, error) {
 		return "", err
 	}
 	return containerInfo.Pid, nil
+}
+
+// getEnvsByPid 获取指定pid进程的环境变量
+func getEnvsByPid(pid string) []string {
+	// 环境变量存放路径
+	path := fmt.Sprintf("/proc/%s/environ", pid)
+	content, err := os.ReadFile(path)
+	if err != nil {
+		logrus.Errorf("Read file %s error %v", path, err)
+		return nil
+	}
+	// env split by \u0000
+	envs := strings.Split(string(content), "\u0000")
+	return envs
 }
