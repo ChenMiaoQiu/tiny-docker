@@ -2,15 +2,18 @@ package main
 
 import (
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/ChenMiaoQiu/tiny-docker/cgroups"
 	"github.com/ChenMiaoQiu/tiny-docker/cgroups/subsystem"
 	"github.com/ChenMiaoQiu/tiny-docker/container"
+	"github.com/ChenMiaoQiu/tiny-docker/network"
 	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
-func Run(tty bool, cmdArr []string, resourcesConfig *subsystem.ResourceConfig, volume string, containerName string, imageName string, envSlice []string) {
+func Run(tty bool, cmdArr []string, resourcesConfig *subsystem.ResourceConfig, volume string, containerName string, imageName string, envSlice []string, net string, portMapping []string) {
 	containerId := container.GenerateContainerID()
 
 	parent, writePipe := container.NewParentProcess(tty, volume, containerId, imageName, envSlice)
@@ -24,7 +27,7 @@ func Run(tty bool, cmdArr []string, resourcesConfig *subsystem.ResourceConfig, v
 	}
 
 	// 记录容器信息
-	err = container.RecordContainerInfo(parent.Process.Pid, cmdArr, containerName, containerId, volume)
+	err = container.RecordContainerInfo(parent.Process.Pid, cmdArr, containerName, containerId, volume, net, portMapping)
 	if err != nil {
 		logrus.Error("Record container info error ", err)
 		return
@@ -36,6 +39,22 @@ func Run(tty bool, cmdArr []string, resourcesConfig *subsystem.ResourceConfig, v
 	_ = cgroupManager.Apply(parent.Process.Pid, resourcesConfig)
 	// 进程结束时自动删除对应cgroup资源限制
 	defer cgroupManager.Destroy()
+
+	// 如果指定了网络信息则进行配置
+	if net != "" {
+		// config container network
+		containerInfo := &container.Info{
+			Id:          containerId,
+			Pid:         strconv.Itoa(parent.Process.Pid),
+			Name:        containerName,
+			PortMapping: portMapping,
+		}
+
+		if _, err = network.Connect(net, containerInfo); err != nil {
+			log.Errorf("Error Connect Network %v", err)
+			return
+		}
+	}
 
 	// 创建完子进程后发送参数
 	sendInitCommand(cmdArr, writePipe)

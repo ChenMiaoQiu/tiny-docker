@@ -26,8 +26,8 @@ type Driver interface {
 	Name() string
 	Create(subnet string, name string) (*Network, error)
 	Delete(name string) error
-	Connect(network *Network, endpoint *Endpoint) error
-	Disconnect(network *Network, endpoint *Endpoint) error
+	Connect(networkName string, endpoint *Endpoint) error
+	Disconnect(endpointID string) error
 }
 
 type IPAMer interface {

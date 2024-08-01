@@ -12,6 +12,8 @@ import (
 	"github.com/vishvananda/netlink"
 )
 
+var _ Driver = (*BridgeNetworkDriver)(nil)
+
 type BridgeNetworkDriver struct {
 }
 
@@ -69,6 +71,7 @@ func (d *BridgeNetworkDriver) initBridge(n *Network) error {
 }
 
 // createBridgeInterface 创建Bridge 设备
+// ip link add xxxx
 func createBridgeInterface(bridgeName string) error {
 	// 检查是否存在同名Bridge设备
 	_, err := net.InterfaceByName(bridgeName)
@@ -90,7 +93,7 @@ func createBridgeInterface(bridgeName string) error {
 	return nil
 }
 
-// setInterfaceIP 设置Bridge设备地址和路由
+// setInterfaceIP 设置网络设备地址和路由
 // ip addr add 172.18.0.1/24 dev br0
 func setInterfaceIP(name string, rawIP string) error {
 	retries := 2
@@ -124,6 +127,7 @@ func setInterfaceIP(name string, rawIP string) error {
 }
 
 // setInterfaceUP 启动网桥
+// 等价于 ip link set xxx up 命令
 func setInterfaceUP(interfaceName string) error {
 	link, err := netlink.LinkByName(interfaceName)
 	if err != nil {
@@ -137,10 +141,21 @@ func setInterfaceUP(interfaceName string) error {
 }
 
 // setupIPTables 设置 iptables 对应 bridge MASQUERADE 规则
+// iptables -t nat -A POSTROUTING -s 172.18.0.0/24 -o eth0 -j MASQUERADE
+// iptables -t nat -A POSTROUTING -s {subnet} -o {deviceName} -j MASQUERADE
 func setupIPTables(bridgeName string, subnet *net.IPNet) error {
+	return configIPTables(bridgeName, subnet, false)
+}
+
+func configIPTables(bridgeName string, subnet *net.IPNet, isDelete bool) error {
+	action := "-A"
+	if isDelete {
+		action = "-D"
+	}
 	// 拼接命令
-	iptablesCmd := fmt.Sprintf("-t nat -A POSTROUTING -s %s ! -o %s -j MASQUERADE", subnet.String(), bridgeName)
+	iptablesCmd := fmt.Sprintf("-t nat %s POSTROUTING -s %s ! -o %s -j MASQUERADE", action, subnet.String(), bridgeName)
 	cmd := exec.Command("iptables", strings.Split(iptablesCmd, " ")...)
+	logrus.Infof("配置 SNAT cmd: %v", cmd.String())
 	// 执行该命令
 	output, err := cmd.Output()
 	if err != nil {
@@ -149,20 +164,20 @@ func setupIPTables(bridgeName string, subnet *net.IPNet) error {
 	return err
 }
 
-// Delete 删除网桥
+// Delete 删除网络
 func (d *BridgeNetworkDriver) Delete(name string) error {
-	// 根据名字找到对应Bridge设备
+	// 根据名字找到对应的Bridge设备
 	br, err := netlink.LinkByName(name)
 	if err != nil {
 		return err
 	}
-	// 删除对应Linux Bridge 设备
+	// 删除网络对应的 Lin ux Bridge 设备
 	return netlink.LinkDel(br)
 }
 
 // Connect 连接网桥和网端
-func (d *BridgeNetworkDriver) Connect(network *Network, endpoint *Endpoint) error {
-	bridgeName := network.Name
+func (d *BridgeNetworkDriver) Connect(networkName string, endpoint *Endpoint) error {
+	bridgeName := networkName
 
 	// 获取要连接的网桥
 	br, err := netlink.LinkByName(bridgeName)
@@ -194,21 +209,33 @@ func (d *BridgeNetworkDriver) Connect(network *Network, endpoint *Endpoint) erro
 	return nil
 }
 
-// Connect 解绑网桥和网端
-func (d *BridgeNetworkDriver) Disconnect(network Network, endpoint *Endpoint) error {
+func (d *BridgeNetworkDriver) Disconnect(endpointID string) error {
 	// 根据名字找到对应的 Veth 设备
-	vethNme := endpoint.ID[:5] // 由于 Linux 接口名的限制,取 endpointID 的前 5 位
+	vethNme := endpointID[:5] // 由于 Linux 接口名的限制,取 endpointID 的前 5 位
 	veth, err := netlink.LinkByName(vethNme)
 	if err != nil {
 		return err
 	}
+	// 从网桥解绑
 	err = netlink.LinkSetNoMaster(veth)
 	if err != nil {
-		return err
+		return errors.WithMessagef(err, "find veth [%s] failed", vethNme)
 	}
-	//err = netlink.LinkDel(veth)
-	//if err != nil {
-	//	return err
-	//}
+	// 删除 veth-pair
+	// 一端为 xxx,另一端为 cif-xxx
+	err = netlink.LinkDel(veth)
+	if err != nil {
+		return errors.WithMessagef(err, "delete veth [%s] failed", vethNme)
+	}
+	veth2Name := "cif-" + vethNme
+	veth2, err := netlink.LinkByName(veth2Name)
+	if err != nil {
+		return errors.WithMessagef(err, "find veth [%s] failed", veth2Name)
+	}
+	err = netlink.LinkDel(veth2)
+	if err != nil {
+		return errors.WithMessagef(err, "delete veth [%s] failed", veth2Name)
+	}
+
 	return nil
 }

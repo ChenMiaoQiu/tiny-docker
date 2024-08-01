@@ -26,17 +26,19 @@ const (
 )
 
 type Info struct {
-	Pid         string `json:"pid"`        // 容器的init进程在宿主机上的 PID
-	Id          string `json:"id"`         // 容器Id
-	Name        string `json:"name"`       // 容器名
-	Command     string `json:"command"`    // 容器内init运行命令
-	CreatedTime string `json:"createTime"` // 创建时间
-	Status      string `json:"status"`     // 容器的状态
-	Volume      string `json:"volume"`     // 容器数据卷
+	Pid         string   `json:"pid"`         // 容器的init进程在宿主机上的 PID
+	Id          string   `json:"id"`          // 容器Id
+	Name        string   `json:"name"`        // 容器名
+	Command     string   `json:"command"`     // 容器内init运行命令
+	CreatedTime string   `json:"createTime"`  // 创建时间
+	Status      string   `json:"status"`      // 容器的状态
+	Volume      string   `json:"volume"`      // 容器数据卷
+	NetworkName string   `json:"networkName"` // 容器所在的网络
+	PortMapping []string `json:"portMapping"` // 端口映射
 }
 
 // RecordContainerInfo 记录容器信息
-func RecordContainerInfo(containerPID int, commandArray []string, containerName string, containerId string, volume string) error {
+func RecordContainerInfo(containerPID int, commandArray []string, containerName string, containerId string, volume string, network string, portMapping []string) error {
 	// 如果未指定容器名，则使用随机生成的containerID
 	if containerName == "" {
 		containerName = containerId
@@ -50,6 +52,8 @@ func RecordContainerInfo(containerPID int, commandArray []string, containerName 
 		CreatedTime: time.Now().Format("2006-01-02 15:04:05"),
 		Status:      RUNNING,
 		Volume:      volume,
+		NetworkName: network,
+		PortMapping: portMapping,
 	}
 
 	jsonByte, err := json.Marshal(containerInfo)

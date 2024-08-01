@@ -31,6 +31,7 @@ func main() {
 			&execCommand,
 			&stopCommand,
 			&removeCommand,
+			&networkCommand,
 		},
 	}
 
