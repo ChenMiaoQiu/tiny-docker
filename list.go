@@ -13,6 +13,7 @@ import (
 
 // ListContainerInfos 打印容器日志信息
 func ListContainerInfos() {
+	// 读取存放容器信息目录下的所有文件
 	files, err := os.ReadDir(container.InfoLoc)
 	if err != nil {
 		logrus.Errorf("read dir %s error %v", container.InfoLoc, err)
@@ -22,32 +23,33 @@ func ListContainerInfos() {
 	for _, file := range files {
 		tmpContainer, err := getContainerInfo(file)
 		if err != nil {
+			logrus.Errorf("get container info error %v", err)
 			continue
 		}
 		containers = append(containers, tmpContainer)
 	}
-
-	// 打印
+	// 使用tabwriter.NewWriter在控制台打印出容器信息
+	// tabwriter 是引用的text/tabwriter类库，用于在控制台打印对齐的表格
 	w := tabwriter.NewWriter(os.Stdout, 12, 1, 3, ' ', 0)
-	_, err = fmt.Fprint(w, "ID\tNAME\tPID\tSTATUS\tCOMMAND\tCREATED\n")
+	_, err = fmt.Fprint(w, "ID\tNAME\tPID\tIP\tSTATUS\tCOMMAND\tCREATED\n")
 	if err != nil {
-		logrus.Error("Fprint error ", err)
+		logrus.Errorf("Fprint error %v", err)
 	}
 	for _, item := range containers {
-		_, err = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+		_, err = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 			item.Id,
 			item.Name,
+			item.IP,
 			item.Pid,
 			item.Status,
 			item.Command,
 			item.CreatedTime)
 		if err != nil {
-			logrus.Error("Fprint info error ", err)
+			logrus.Errorf("Fprint error %v", err)
 		}
 	}
-
 	if err = w.Flush(); err != nil {
-		logrus.Error("Flush error ", err)
+		logrus.Errorf("Flush error %v", err)
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 
 	"github.com/ChenMiaoQiu/tiny-docker/constant"
 	"github.com/ChenMiaoQiu/tiny-docker/container"
+	"github.com/ChenMiaoQiu/tiny-docker/network"
 	"github.com/sirupsen/logrus"
 )
 
@@ -82,6 +83,13 @@ func removeContainer(containerId string, force bool) {
 		}
 		// 删除工作文件夹
 		container.DeleteWorkSpace(containerId, containerInfo.Volume)
+		// 清理网络资源
+		if containerInfo.NetworkName != "" {
+			if err = network.Disconnect(containerInfo.NetworkName, &containerInfo); err != nil {
+				logrus.Errorf("Remove container [%s]'s config failed, detail: %v", containerId, err)
+				return
+			}
+		}
 	case container.RUNNING: // 如果状态为运行中，判断是否强制删除，如果强制删除则先暂停再删除
 		if !force {
 			logrus.Errorf(`Couldn't remove running container [%s], Stop the container before attempting removal or force remove`, containerId)

@@ -1,10 +1,11 @@
 package network
 
 import (
+	"net"
 	"testing"
 )
 
-var testName = "testbridge0"
+var testName = "testbridge"
 
 func TestBridgeCreate(t *testing.T) {
 	d := BridgeNetworkDriver{}
@@ -17,7 +18,12 @@ func TestBridgeCreate(t *testing.T) {
 
 func TestBridgeDelete(t *testing.T) {
 	d := BridgeNetworkDriver{}
-	err := d.Delete(testName)
+	_, ipRange, _ := net.ParseCIDR("192.168.0.1/24")
+	n := &Network{
+		Name:    testName,
+		IPRange: ipRange,
+	}
+	err := d.Delete(n)
 	if err != nil {
 		t.Fatal(err)
 	}

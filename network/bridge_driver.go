@@ -147,6 +147,10 @@ func setupIPTables(bridgeName string, subnet *net.IPNet) error {
 	return configIPTables(bridgeName, subnet, false)
 }
 
+func deleteIPTables(bridgeName string, subnet *net.IPNet) error {
+	return configIPTables(bridgeName, subnet, true)
+}
+
 func configIPTables(bridgeName string, subnet *net.IPNet, isDelete bool) error {
 	action := "-A"
 	if isDelete {
@@ -165,14 +169,75 @@ func configIPTables(bridgeName string, subnet *net.IPNet, isDelete bool) error {
 }
 
 // Delete 删除网络
-func (d *BridgeNetworkDriver) Delete(name string) error {
-	// 根据名字找到对应的Bridge设备
-	br, err := netlink.LinkByName(name)
+func (d *BridgeNetworkDriver) Delete(network *Network) error {
+	// 清除路由规则
+	err := deleteIPRoute(network.Name, network.IPRange.IP.String())
+	if err != nil {
+		return errors.WithMessagef(err, "clean route rule failed after bridge [%s] deleted", network.Name)
+	}
+	// 清除 iptables 规则
+	err = deleteIPTables(network.Name, network.IPRange)
+	if err != nil {
+		return errors.WithMessagef(err, "clean snat iptables rule failed after bridge [%s] deleted", network.Name)
+	}
+	// 删除网桥
+	err = d.deleteBridge(network)
+	if err != nil {
+		return errors.WithMessagef(err, "delete bridge [%s] failed", network.Name)
+	}
+	return nil
+}
+
+// 删除路由，ip addr del xxx命令
+func deleteIPRoute(name string, rawIP string) error {
+	retries := 2
+	var iface netlink.Link
+	var err error
+	for i := 0; i < retries; i++ {
+		// 通过LinkByName方法找到需要设置的网络接口
+		iface, err = netlink.LinkByName(name)
+		if err == nil {
+			break
+		}
+		logrus.Debugf("error retrieving new bridge netlink link [ %s ]... retrying", name)
+		time.Sleep(2 * time.Second)
+	}
+	if err != nil {
+		return errors.Wrap(err, "abandoning retrieving the new bridge link from netlink, Run [ ip link ] to troubleshoot")
+	}
+	// 查询对应设备的路由并全部删除
+	list, err := netlink.RouteList(iface, netlink.FAMILY_V4)
 	if err != nil {
 		return err
 	}
-	// 删除网络对应的 Lin ux Bridge 设备
-	return netlink.LinkDel(br)
+	for _, route := range list {
+		if route.Dst.String() == rawIP { // 根据子网进行匹配
+			err = netlink.RouteDel(&route)
+			if err != nil {
+				logrus.Errorf("route [%v] del failed,detail:%v", route, err)
+				continue
+			}
+		}
+	}
+	return nil
+}
+
+// deleteBridge deletes the bridge
+func (d *BridgeNetworkDriver) deleteBridge(n *Network) error {
+	bridgeName := n.Name
+
+	// get the link
+	l, err := netlink.LinkByName(bridgeName)
+	if err != nil {
+		return fmt.Errorf("getting link with name %s failed: %v", bridgeName, err)
+	}
+
+	// delete the link
+	if err = netlink.LinkDel(l); err != nil {
+		return fmt.Errorf("failed to remove bridge interface %s delete: %v", bridgeName, err)
+	}
+
+	return nil
 }
 
 // Connect 连接网桥和网端

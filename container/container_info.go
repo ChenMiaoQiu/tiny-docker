@@ -35,10 +35,11 @@ type Info struct {
 	Volume      string   `json:"volume"`      // 容器数据卷
 	NetworkName string   `json:"networkName"` // 容器所在的网络
 	PortMapping []string `json:"portMapping"` // 端口映射
+	IP          string   `json:"ip"`          // 容器IP
 }
 
 // RecordContainerInfo 记录容器信息
-func RecordContainerInfo(containerPID int, commandArray []string, containerName string, containerId string, volume string, network string, portMapping []string) error {
+func RecordContainerInfo(containerPID int, commandArray []string, containerName string, containerId string, volume string, network string, portMapping []string, ip string) (*Info, error) {
 	// 如果未指定容器名，则使用随机生成的containerID
 	if containerName == "" {
 		containerName = containerId
@@ -54,17 +55,18 @@ func RecordContainerInfo(containerPID int, commandArray []string, containerName 
 		Volume:      volume,
 		NetworkName: network,
 		PortMapping: portMapping,
+		IP:          ip,
 	}
 
 	jsonByte, err := json.Marshal(containerInfo)
 	if err != nil {
-		return errors.WithMessage(err, "container info marshal failed")
+		return nil, errors.WithMessage(err, "container info marshal failed")
 	}
 	jsonStr := string(jsonByte)
 	// 拼接出存储容器信息文件的路径，如果目录不存在则级联创建
 	dirPath := fmt.Sprintf(InfoLocFormat, containerId)
 	if err := os.MkdirAll(dirPath, constant.Perm0622); err != nil {
-		return errors.WithMessagef(err, "mkdir %s failed", dirPath)
+		return nil, errors.WithMessagef(err, "mkdir %s failed", dirPath)
 	}
 
 	// 写入文件信息
@@ -74,14 +76,14 @@ func RecordContainerInfo(containerPID int, commandArray []string, containerName 
 		_ = file.Close()
 	}()
 	if err != nil {
-		return errors.WithMessagef(err, "create file %s failed", fileName)
+		return nil, errors.WithMessagef(err, "create file %s failed", fileName)
 	}
 	_, err = file.WriteString(jsonStr)
 	if err != nil {
-		return errors.WithMessagef(err, "write container info to config file %s failed", fileName)
+		return nil, errors.WithMessagef(err, "write container info to config file %s failed", fileName)
 	}
 
-	return nil
+	return containerInfo, nil
 }
 
 // DeleteContainerInfo 删除容器日志

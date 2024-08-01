@@ -10,7 +10,6 @@ import (
 	"github.com/ChenMiaoQiu/tiny-docker/container"
 	"github.com/ChenMiaoQiu/tiny-docker/network"
 	"github.com/sirupsen/logrus"
-	log "github.com/sirupsen/logrus"
 )
 
 func Run(tty bool, cmdArr []string, resourcesConfig *subsystem.ResourceConfig, volume string, containerName string, imageName string, envSlice []string, net string, portMapping []string) {
@@ -26,13 +25,6 @@ func Run(tty bool, cmdArr []string, resourcesConfig *subsystem.ResourceConfig, v
 		logrus.Error(err)
 	}
 
-	// 记录容器信息
-	err = container.RecordContainerInfo(parent.Process.Pid, cmdArr, containerName, containerId, volume, net, portMapping)
-	if err != nil {
-		logrus.Error("Record container info error ", err)
-		return
-	}
-
 	cgroupManager := cgroups.NewCgroupManager("tiny-docker")
 	// 配置cgroup资源限制
 	_ = cgroupManager.Set(resourcesConfig)
@@ -40,6 +32,7 @@ func Run(tty bool, cmdArr []string, resourcesConfig *subsystem.ResourceConfig, v
 	// 进程结束时自动删除对应cgroup资源限制
 	defer cgroupManager.Destroy()
 
+	var containerIP string
 	// 如果指定了网络信息则进行配置
 	if net != "" {
 		// config container network
@@ -50,10 +43,19 @@ func Run(tty bool, cmdArr []string, resourcesConfig *subsystem.ResourceConfig, v
 			PortMapping: portMapping,
 		}
 
-		if _, err = network.Connect(net, containerInfo); err != nil {
-			log.Errorf("Error Connect Network %v", err)
+		ip, err := network.Connect(net, containerInfo)
+		if err != nil {
+			logrus.Errorf("Error Connect Network %v", err)
 			return
 		}
+		containerIP = ip.String()
+	}
+
+	// 记录容器信息
+	containerInfo, err := container.RecordContainerInfo(parent.Process.Pid, cmdArr, containerName, containerId, volume, net, portMapping, containerIP)
+	if err != nil {
+		logrus.Error("Record container info error ", err)
+		return
 	}
 
 	// 创建完子进程后发送参数
@@ -64,6 +66,10 @@ func Run(tty bool, cmdArr []string, resourcesConfig *subsystem.ResourceConfig, v
 		// 解绑并删除overlayFS 使用的upper work mount 文件夹
 		container.DeleteWorkSpace(containerId, volume)
 		container.DeleteContainerInfo(containerId)
+
+		if net != "" {
+			network.Disconnect(net, containerInfo)
+		}
 	}
 }
 
